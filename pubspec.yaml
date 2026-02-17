@@ -25,6 +25,21 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  # Το πακέτο για τα εικονίδια
+  flutter_launcher_icons: ^0.13.1
+
+# Ρυθμίσεις για τα εικονίδια
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/logo.png" 
+  adaptive_icon_background: "#bc955c" 
+  adaptive_icon_foreground: "assets/ic_notif.png" 
 
 flutter:
   uses-material-design: true
+  
+  # Δήλωση των assets
+  assets:
+    - assets/logo.png
+    - assets/ic_notif.png
