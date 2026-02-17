@@ -1,0 +1,28 @@
+workflows:
+  ios-workflow:
+    name: iOS Build for Sideloadly
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Get Flutter packages
+        script: |
+          flutter packages pub get
+      - name: Install Pods
+        script: |
+          find . -name "Podfile" -exec dir {} \;
+          cd ios && pod install
+      - name: Build iOS Runner
+        script: |
+          # Χτίσιμο της εφαρμογής χωρίς ψηφιακή υπογραφή (για Sideloadly)
+          flutter build ios --release --no-codesign
+      - name: Create IPA
+        script: |
+          # Μετατροπή του .app σε .ipa χειροκίνητα
+          cd build/ios/iphoneos
+          mkdir Payload
+          mv Runner.app Payload/
+          zip -r Apatheia.ipa Payload
+    artifacts:
+      - build/ios/iphoneos/Apatheia.ipa
