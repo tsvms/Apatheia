@@ -65,7 +65,7 @@ void performHaptic(HapticFeedbackType type) {
 enum HapticFeedbackType { light, medium, heavy }
 
 // -----------------------------------------------------------------------------
-// 2. SERVICES (UPDATED FOR ANDROID ICONS & PERMISSIONS)
+// 2. SERVICES (NOTIFICATIONS)
 // -----------------------------------------------------------------------------
 
 class NotificationService {
@@ -74,10 +74,8 @@ class NotificationService {
   static Future<void> init() async {
     tz.initializeTimeZones();
 
-    // Android Settings: Χρήση του ic_notif για σωστή εμφάνιση (transparent)
     const androidSettings = AndroidInitializationSettings('ic_notif');
 
-    // iOS Settings
     final iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -88,7 +86,6 @@ class NotificationService {
         InitializationSettings(android: androidSettings, iOS: iosSettings);
     await _notifications.initialize(settings);
 
-    // Αίτηση άδειας για Android 13+
     _notifications
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
@@ -112,7 +109,8 @@ class NotificationService {
             priority: Priority.high),
         iOS: DarwinNotificationDetails(),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      // Inexact mode fixes crashes on Android 13/14 missing exact alarm permissions
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       payload: id.toString(),
@@ -137,7 +135,7 @@ class NotificationService {
             priority: Priority.high),
         iOS: DarwinNotificationDetails(presentSound: true),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.time,
@@ -212,22 +210,22 @@ void main() async {
     statusBarIconBrightness: Brightness.dark,
   ));
 
-  // Load saved quote time
   final prefs = await SharedPreferences.getInstance();
   int qHour = prefs.getInt('quote_hour') ?? 9;
   int qMinute = prefs.getInt('quote_minute') ?? 0;
 
+  // Motivational / Enriched Notifications
   NotificationService.scheduleDaily(
       id: 888,
-      title: "Daily Stoic",
-      body: "Start your day with clarity.",
+      title: "Daily Wisdom",
+      body: "Start your day with clarity. Read your daily quote.",
       hour: qHour,
       minute: qMinute);
 
   NotificationService.scheduleDaily(
       id: 889,
-      title: "Keep the Streak!",
-      body: "Don't break the chain.",
+      title: "Stay Disciplined",
+      body: "Don't let the streak end, add a task for today!",
       hour: 18,
       minute: 0);
 
@@ -290,7 +288,7 @@ class MinimalApp extends StatelessWidget {
 }
 
 // -----------------------------------------------------------------------------
-// 5. MAIN SCREEN & NAVIGATION
+// 5. MAIN SCREEN & NAVIGATION (Keyboard Dismiss Fix)
 // -----------------------------------------------------------------------------
 
 class MainScreen extends StatefulWidget {
@@ -328,54 +326,58 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-              child: IndexedStack(index: _selectedIndex, children: _pages)),
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 30,
-            child: SafeArea(
-              child: Container(
-                height: 70,
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF1C1C1E).withValues(alpha: 0.85)
-                      : Colors.white.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(35),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.2),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10))
-                  ],
-                  border: Border.all(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.1)
-                          : Colors.white.withValues(alpha: 0.5)),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(35),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildNavItem(0, CupertinoIcons.check_mark_circled),
-                        _buildNavItem(1, CupertinoIcons.repeat),
-                        _buildNavItem(2, CupertinoIcons.book),
-                        _buildNavItem(3, CupertinoIcons.timer),
-                        _buildNavItem(4, CupertinoIcons.compass),
-                      ],
+    // Gesture Detector for global keyboard dismissal
+    return GestureDetector(
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      child: Scaffold(
+        body: Stack(
+          children: [
+            Positioned.fill(
+                child: IndexedStack(index: _selectedIndex, children: _pages)),
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 30,
+              child: SafeArea(
+                child: Container(
+                  height: 70,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF1C1C1E).withValues(alpha: 0.85)
+                        : Colors.white.withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(35),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10))
+                    ],
+                    border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.1)
+                            : Colors.white.withValues(alpha: 0.5)),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(35),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildNavItem(0, CupertinoIcons.check_mark_circled),
+                          _buildNavItem(1, CupertinoIcons.repeat),
+                          _buildNavItem(2, CupertinoIcons.book),
+                          _buildNavItem(3, CupertinoIcons.timer),
+                          _buildNavItem(4, CupertinoIcons.compass),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ).animate().fadeIn(duration: 500.ms).moveY(begin: 50, end: 0),
+                ).animate().fadeIn(duration: 500.ms).moveY(begin: 50, end: 0),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -505,12 +507,20 @@ Widget _buildTip(
   );
 }
 
-void _showSettingsSheet(BuildContext context) {
+// Helper to pre-load settings inside the Modal
+void _showSettingsSheet(BuildContext context) async {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   final bg = isDark
       ? const Color(0xFF1C1C1E).withValues(alpha: 0.95)
       : Colors.white.withValues(alpha: 0.95);
   final textC = getTextColor(context);
+
+  // Time Picker Persistence Fix
+  final prefs = await SharedPreferences.getInstance();
+  int savedHour = prefs.getInt('quote_hour') ?? 9;
+  int savedMinute = prefs.getInt('quote_minute') ?? 0;
+
+  if (!context.mounted) return;
 
   showModalBottomSheet(
     context: context,
@@ -523,6 +533,9 @@ void _showSettingsSheet(BuildContext context) {
           padding: const EdgeInsets.all(30),
           decoration: BoxDecoration(color: bg),
           child: StatefulBuilder(builder: (context, setState) {
+            String timeString =
+                TimeOfDay(hour: savedHour, minute: savedMinute).format(context);
+
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -546,25 +559,33 @@ void _showSettingsSheet(BuildContext context) {
                   title: Text("Quote Notification Time",
                       style: GoogleFonts.inter(
                           fontWeight: FontWeight.bold, color: textC)),
+                  subtitle: Text("Currently set to: $timeString",
+                      style: TextStyle(color: Colors.grey, fontSize: 12)),
                   trailing: Icon(CupertinoIcons.time, color: textC),
                   onTap: () async {
                     final TimeOfDay? picked = await showTimePicker(
                         context: context,
-                        initialTime: const TimeOfDay(hour: 9, minute: 0));
+                        initialTime:
+                            TimeOfDay(hour: savedHour, minute: savedMinute));
                     if (picked != null) {
-                      final prefs = await SharedPreferences.getInstance();
                       await prefs.setInt('quote_hour', picked.hour);
                       await prefs.setInt('quote_minute', picked.minute);
+                      setState(() {
+                        savedHour = picked.hour;
+                        savedMinute = picked.minute;
+                      });
                       await NotificationService.cancel(888);
                       await NotificationService.scheduleDaily(
                           id: 888,
-                          title: "Daily Stoic",
-                          body: "Start your day with clarity.",
+                          title: "Daily Wisdom",
+                          body:
+                              "Start your day with clarity. Read your daily quote.",
                           hour: picked.hour,
                           minute: picked.minute);
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                           content: Text(
-                              "Notification set to ${picked.format(context)}"),
+                              "Notification updated to ${picked.format(context)}"),
                           backgroundColor: Colors.black));
                     }
                   },
@@ -671,7 +692,7 @@ void _showSettingsSheet(BuildContext context) {
 }
 
 // -----------------------------------------------------------------------------
-// 7. FOCUS PAGE
+// 7. FOCUS PAGE (Date Header Fix)
 // -----------------------------------------------------------------------------
 
 class FocusPage extends StatefulWidget {
@@ -735,22 +756,6 @@ class _FocusPageState extends State<FocusPage> {
       _tasks.insert(newIndex, item);
     });
     _saveTasks();
-  }
-
-  // --- SORT FUNCTION ---
-  void _sortTasks() {
-    setState(() {
-      _tasks.sort((a, b) {
-        int pA = a['priority'] ?? 0;
-        int pB = b['priority'] ?? 0;
-        return pB.compareTo(pA); // High to Low
-      });
-    });
-    _saveTasks();
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text("Sorted by Priority"),
-        duration: Duration(milliseconds: 800),
-        backgroundColor: Colors.black));
   }
 
   Future<void> _logActivity() async {
@@ -1062,17 +1067,18 @@ class _FocusPageState extends State<FocusPage> {
                                   shape: BoxShape.circle),
                               child: Icon(CupertinoIcons.settings,
                                   size: 20, color: textC))),
-                      // -- SORT BUTTON --
-                      GestureDetector(
-                          onTap: _sortTasks,
-                          child: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                  color: Colors.grey.withValues(alpha: 0.1),
-                                  shape: BoxShape.circle),
-                              child: Icon(CupertinoIcons.sort_down,
-                                  size: 20, color: textC))),
-                      // ----------------
+
+                      // DATE IN HEADER FIX
+                      Text(
+                          DateFormat('EEEE, d MMM')
+                              .format(DateTime.now())
+                              .toUpperCase(),
+                          style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 2,
+                              color: Colors.grey)),
+
                       GestureDetector(
                           onTap: () => _showProfileSheet(context),
                           child: Container(
@@ -1552,6 +1558,8 @@ class _JournalPageState extends State<JournalPage> {
                       child: Text("No entries yet.",
                           style: GoogleFonts.inter(color: Colors.grey)))
                   : ListView.builder(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: const EdgeInsets.only(
                           left: 24, right: 24, top: 10, bottom: 120),
                       itemCount: _entries.length,
@@ -1882,11 +1890,12 @@ class _HabitsPageState extends State<HabitsPage> {
   }
 
   void _addHabit(String title, String tags, int color, int frequency,
-      List<int>? weekdays) {
+      List<int>? weekdays, String? time) {
     setState(() {
       _habits.add({
         'id': DateTime.now().millisecondsSinceEpoch,
         'title': title,
+        'time': time,
         'streak': 0,
         'isDone': false,
         'tags': tags,
@@ -1915,11 +1924,12 @@ class _HabitsPageState extends State<HabitsPage> {
   }
 
   void _updateHabit(int index, String title, String tags, int colorValue,
-      int freq, List<int>? weekdays) {
+      int freq, List<int>? weekdays, String? time) {
     setState(() {
       _habits[index]['title'] = title;
       _habits[index]['tags'] = tags;
       _habits[index]['color'] = colorValue;
+      _habits[index]['time'] = time;
       _habits[index]['frequency'] = freq;
       _habits[index]['repeatType'] = weekdays != null ? 'weekdays' : 'interval';
       _habits[index]['weekdays'] = weekdays;
@@ -1927,7 +1937,6 @@ class _HabitsPageState extends State<HabitsPage> {
     _saveHabits();
   }
 
-  // Used for editing/showing details
   void _showHabitDetails(int index) {
     showModalBottomSheet(
       context: context,
@@ -1937,11 +1946,13 @@ class _HabitsPageState extends State<HabitsPage> {
         initialTitle: _habits[index]['title'],
         initialTags: _habits[index]['tags'] ?? '',
         initialColor: _habits[index]['color'] ?? Colors.white.value,
-        initialTime: null,
+        initialTime: _habits[index]['time'],
         initialFrequency: _habits[index]['frequency'] ?? 1,
+        initialRepeatType: _habits[index]['repeatType'] ?? 'interval',
+        initialWeekdays: List<int>.from(_habits[index]['weekdays'] ?? []),
         isHabit: true,
         onSave: (title, tags, color, time, freq, {weekdays, priority}) =>
-            _updateHabit(index, title, tags, color, freq, weekdays),
+            _updateHabit(index, title, tags, color, freq, weekdays, time),
         onDelete: () {
           _deleteHabit(index);
           Navigator.pop(context);
@@ -1964,7 +1975,8 @@ class _HabitsPageState extends State<HabitsPage> {
         isHabit: true,
         isNew: true,
         onSave: (title, tags, color, time, freq, {weekdays, priority}) {
-          if (title.isNotEmpty) _addHabit(title, tags, color, freq, weekdays);
+          if (title.isNotEmpty)
+            _addHabit(title, tags, color, freq, weekdays, time);
         },
       ),
     );
@@ -2070,7 +2082,7 @@ class _HabitsPageState extends State<HabitsPage> {
                           children: [
                           Icon(CupertinoIcons.repeat,
                               size: 48, color: Colors.grey),
-                          SizedBox(height: 16),
+                          const SizedBox(height: 16),
                           Text("No rituals yet.\nDiscipline starts now.",
                               textAlign: TextAlign.center,
                               style: GoogleFonts.inter(
@@ -2150,8 +2162,11 @@ class ReorderableDismissibleTaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorVal = task['color'] ?? Colors.white.value;
     final bgColor = getCardColor(context, colorVal);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textC = getTextColor(context);
+
+    // VISIBILITY FIX: Analyze background brightness to determine text color dynamically
+    final bool isDarkBg =
+        ThemeData.estimateBrightnessForColor(bgColor) == Brightness.dark;
+    final Color contentColor = isDarkBg ? Colors.white : Colors.black;
 
     // Visual Priority Indicator
     final int priority = task['priority'] ?? 0;
@@ -2172,7 +2187,6 @@ class ReorderableDismissibleTaskCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(48)),
             child: const Icon(CupertinoIcons.trash, color: Colors.red)),
         onDismissed: (_) => onDelete(),
-        // IMPORTANT: Removed onLongPress so ReorderableListView handles drag
         child: GestureDetector(
           onTap: onTap,
           child: Container(
@@ -2206,14 +2220,17 @@ class ReorderableDismissibleTaskCard extends StatelessWidget {
                       width: 24,
                       height: 24,
                       decoration: ShapeDecoration(
-                          color: task['isDone'] ? textC : Colors.transparent,
+                          color: task['isDone']
+                              ? contentColor
+                              : Colors.transparent,
                           shape: ContinuousRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(color: textC, width: 1.5))),
+                              side:
+                                  BorderSide(color: contentColor, width: 1.5))),
                       child: task['isDone']
                           ? Icon(Icons.check,
                               size: 16,
-                              color: isDark ? Colors.black : Colors.white)
+                              color: isDarkBg ? Colors.black : Colors.white)
                           : null)),
               const SizedBox(width: 16),
               Expanded(
@@ -2222,16 +2239,16 @@ class ReorderableDismissibleTaskCard extends StatelessWidget {
                       children: [
                     AnimatedOpacity(
                         duration: const Duration(milliseconds: 200),
-                        opacity: task['isDone'] ? 0.3 : 1.0,
+                        opacity: task['isDone'] ? 0.4 : 1.0,
                         child: Text(task['title'],
                             style: GoogleFonts.inter(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w500,
-                                color: textC,
+                                color: contentColor,
                                 decoration: task['isDone']
                                     ? TextDecoration.lineThrough
                                     : null,
-                                decorationColor: textC))),
+                                decorationColor: contentColor))),
                     Padding(
                         padding: const EdgeInsets.only(top: 4.0),
                         child: Wrap(
@@ -2250,23 +2267,27 @@ class ReorderableDismissibleTaskCard extends StatelessWidget {
                                         style: TextStyle(
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
-                                            color: textC))),
+                                            color: contentColor))),
                               if (extraInfo != null && extraInfo!.isNotEmpty)
                                 Text("↻ $extraInfo",
                                     style: TextStyle(
                                         fontSize: 10,
-                                        color: Colors.grey,
+                                        color:
+                                            contentColor.withValues(alpha: 0.6),
                                         fontWeight: FontWeight.w600)),
                               if (task['time'] != null && !task['isDone'])
                                 Text("⏰ ${task['time']}",
                                     style: TextStyle(
-                                        fontSize: 11, color: Colors.grey)),
+                                        fontSize: 11,
+                                        color: contentColor.withValues(
+                                            alpha: 0.6))),
                               if (task['tags'] != null &&
                                   task['tags'].toString().isNotEmpty)
                                 Text("#${task['tags']}",
                                     style: TextStyle(
                                         fontSize: 11,
-                                        color: Colors.grey,
+                                        color:
+                                            contentColor.withValues(alpha: 0.6),
                                         fontWeight: FontWeight.bold)),
                             ])),
                   ])),
@@ -2285,6 +2306,8 @@ class TaskDetailSheet extends StatefulWidget {
   final String? initialTime;
   final int initialFrequency;
   final int initialPriority;
+  final String initialRepeatType; // Habit Persist Fix
+  final List<int> initialWeekdays; // Habit Persist Fix
   final bool isHabit;
   final bool isNew;
   final Function(String, String, int, String?, int,
@@ -2299,6 +2322,8 @@ class TaskDetailSheet extends StatefulWidget {
       this.initialTime,
       required this.initialFrequency,
       this.initialPriority = 0,
+      this.initialRepeatType = 'interval',
+      this.initialWeekdays = const [],
       required this.isHabit,
       this.isNew = false,
       required this.onSave,
@@ -2315,9 +2340,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   late int _selectedFrequency;
   late int _selectedPriority;
   String? _selectedTime;
-
-  String _repeatType = 'interval';
-  List<int> _selectedWeekdays = [];
+  late String _repeatType;
+  late List<int> _selectedWeekdays;
 
   @override
   void initState() {
@@ -2328,6 +2352,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     _selectedTime = widget.initialTime;
     _selectedFrequency = widget.initialFrequency;
     _selectedPriority = widget.initialPriority;
+    _repeatType = widget.initialRepeatType;
+    _selectedWeekdays = List<int>.from(widget.initialWeekdays);
   }
 
   @override
@@ -2337,6 +2363,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         ? const Color(0xFF1C1C1E).withValues(alpha: 0.95)
         : Colors.white.withValues(alpha: 0.95);
     final textC = isDark ? Colors.white : Colors.black;
+
+    // Visibility fix for unselected buttons inside segmented controls
+    final Color selectedThumbColor = isDark ? Colors.white : Colors.black;
+    final Color unselectedTextColor = isDark ? Colors.white : Colors.black;
+    final Color selectedTextColor = isDark ? Colors.black : Colors.white;
 
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(40)),
@@ -2379,8 +2410,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                         border: InputBorder.none,
                         hintText:
                             widget.isNew ? "What needs to be done?" : null,
-                        hintStyle: TextStyle(color: Colors.grey))),
+                        hintStyle: const TextStyle(color: Colors.grey))),
                 const SizedBox(height: 20),
+
                 if (!widget.isHabit) ...[
                   Text("PRIORITY",
                       style: GoogleFonts.inter(
@@ -2388,22 +2420,37 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                           letterSpacing: 1.5,
                           color: Colors.grey)),
                   const SizedBox(height: 10),
-                  Container(
+                  SizedBox(
                     width: double.infinity,
                     child: CupertinoSegmentedControl<int>(
                       groupValue: _selectedPriority,
                       borderColor: isDark ? Colors.grey[700] : Colors.black,
-                      selectedColor: isDark ? Colors.white : Colors.black,
+                      selectedColor: selectedThumbColor,
                       unselectedColor: Colors.transparent,
                       pressedColor:
                           isDark ? Colors.grey[800] : Colors.grey[200],
-                      children: const {
+                      children: {
                         0: Padding(
-                            padding: EdgeInsets.all(8), child: Text("Low")),
+                            padding: const EdgeInsets.all(8),
+                            child: Text("Low",
+                                style: TextStyle(
+                                    color: _selectedPriority == 0
+                                        ? selectedTextColor
+                                        : unselectedTextColor))),
                         1: Padding(
-                            padding: EdgeInsets.all(8), child: Text("Medium")),
+                            padding: const EdgeInsets.all(8),
+                            child: Text("Medium",
+                                style: TextStyle(
+                                    color: _selectedPriority == 1
+                                        ? selectedTextColor
+                                        : unselectedTextColor))),
                         2: Padding(
-                            padding: EdgeInsets.all(8), child: Text("High")),
+                            padding: const EdgeInsets.all(8),
+                            child: Text("High",
+                                style: TextStyle(
+                                    color: _selectedPriority == 2
+                                        ? selectedTextColor
+                                        : unselectedTextColor))),
                       },
                       onValueChanged: (val) {
                         setState(() => _selectedPriority = val!);
@@ -2412,6 +2459,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                   ),
                   const SizedBox(height: 20),
                 ],
+
                 if (widget.isHabit) ...[
                   Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2423,15 +2471,22 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                                 color: Colors.grey)),
                         CupertinoSlidingSegmentedControl<String>(
                             groupValue: _repeatType,
-                            children: const {
-                              'interval': Text("Every X Days"),
-                              'weekdays': Text("Weekdays")
+                            children: {
+                              'interval': Text("Every X Days",
+                                  style: TextStyle(
+                                      color: _repeatType == 'interval'
+                                          ? selectedTextColor
+                                          : unselectedTextColor)),
+                              'weekdays': Text("Weekdays",
+                                  style: TextStyle(
+                                      color: _repeatType == 'weekdays'
+                                          ? selectedTextColor
+                                          : unselectedTextColor))
                             },
                             onValueChanged: (val) {
                               setState(() => _repeatType = val!);
                             },
-                            thumbColor:
-                                isDark ? Colors.grey[800]! : Colors.white)
+                            thumbColor: selectedThumbColor)
                       ]),
                   const SizedBox(height: 15),
                   if (_repeatType == 'interval')
@@ -2520,61 +2575,67 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                                         ? [
                                             BoxShadow(
                                                 color: Colors.black
-                                                    .withOpacity(0.2),
+                                                    .withValues(alpha: 0.2),
                                                 blurRadius: 6)
                                           ]
                                         : []),
+                                // Checkmark contrast fix
                                 child: _selectedColor == c.value
-                                    ? const Icon(Icons.check,
-                                        size: 16, color: Colors.black)
+                                    ? Icon(Icons.check,
+                                        size: 16,
+                                        color: ThemeData
+                                                    .estimateBrightnessForColor(
+                                                        c) ==
+                                                Brightness.light
+                                            ? Colors.black
+                                            : Colors.white)
                                     : null)))
                         .toList()),
                 const SizedBox(height: 20),
-                if (!widget.isHabit) ...[
-                  Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text("NOTIFICATION",
-                            style: GoogleFonts.inter(
-                                fontSize: 10,
-                                letterSpacing: 1.5,
-                                color: Colors.grey)),
-                        GestureDetector(
-                            onTap: () async {
-                              final t = await showTimePicker(
-                                  context: context,
-                                  initialTime: TimeOfDay.now());
-                              if (t != null)
-                                setState(() =>
-                                    _selectedTime = "${t.hour}:${t.minute}");
-                            },
-                            child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                    color: _selectedTime != null
-                                        ? textC
-                                        : Colors.grey.withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(12)),
-                                child: Text(_selectedTime ?? "Set Time",
-                                    style: TextStyle(
-                                        color: _selectedTime != null
-                                            ? (isDark
-                                                ? Colors.black
-                                                : Colors.white)
-                                            : textC,
-                                        fontWeight: FontWeight.bold))))
-                      ]),
-                  if (_selectedTime != null)
-                    Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                            onPressed: () =>
-                                setState(() => _selectedTime = null),
-                            child: const Text("Clear",
-                                style: TextStyle(
-                                    color: Colors.red, fontSize: 12))))
-                ],
+
+                // NOTIFICATION TIME FOR BOTH TASKS AND HABITS
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("TIME (Optional)",
+                          style: GoogleFonts.inter(
+                              fontSize: 10,
+                              letterSpacing: 1.5,
+                              color: Colors.grey)),
+                      GestureDetector(
+                          onTap: () async {
+                            final t = await showTimePicker(
+                                context: context, initialTime: TimeOfDay.now());
+                            if (t != null)
+                              setState(() => _selectedTime =
+                                  "${t.hour}:${t.minute.toString().padLeft(2, '0')}");
+                          },
+                          child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                  color: _selectedTime != null
+                                      ? textC
+                                      : Colors.grey.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(12)),
+                              child: Text(_selectedTime ?? "Set Time",
+                                  style: TextStyle(
+                                      color: _selectedTime != null
+                                          ? (isDark
+                                              ? Colors.black
+                                              : Colors.white)
+                                          : textC,
+                                      fontWeight: FontWeight.bold))))
+                    ]),
+                if (_selectedTime != null)
+                  Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                          onPressed: () => setState(() => _selectedTime = null),
+                          child: const Text("Clear",
+                              style:
+                                  TextStyle(color: Colors.red, fontSize: 12)))),
+
                 const SizedBox(height: 30),
                 SizedBox(
                     width: double.infinity,
