@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -13,6 +12,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:flutter_timezone/flutter_timezone.dart';
 
 // -----------------------------------------------------------------------------
 // 1. GLOBAL SETTINGS MANAGER (Theme & Haptics)
@@ -74,22 +74,32 @@ class NotificationService {
   static Future<void> init() async {
     tz.initializeTimeZones();
 
+    // Σωστό διάβασμα της τοπικής ώρας του κινητού
+    // Αφαιρούμε το 'String' και παίρνουμε το identifier
+    final timeZoneInfo = await FlutterTimezone.getLocalTimezone();
+    final String timeZoneName = timeZoneInfo.identifier;
+    tz.setLocalLocation(tz.getLocation(timeZoneName));
+
     const androidSettings = AndroidInitializationSettings('ic_notif');
 
-    final iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
+    // Αφαίρεση των παλιών παραμέτρων, πλέον τα ζητάμε πιο κάτω
+    final iosSettings = DarwinInitializationSettings();
 
     final settings =
         InitializationSettings(android: androidSettings, iOS: iosSettings);
     await _notifications.initialize(settings);
 
+    // Ζητάμε άδεια για Android (ειδικά για Android 13+)
     _notifications
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
+
+    // Ζητάμε άδεια ρητά για iOS (iPhone)
+    _notifications
+        .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin>()
+        ?.requestPermissions(alert: true, badge: true, sound: true);
   }
 
   static Future<void> scheduleNotification(
@@ -107,9 +117,10 @@ class NotificationService {
             icon: 'ic_notif',
             importance: Importance.max,
             priority: Priority.high),
-        iOS: DarwinNotificationDetails(),
+        // Ενεργοποίηση για να φαίνεται στο iPhone ακόμα κι αν το app είναι ανοιχτό
+        iOS: DarwinNotificationDetails(
+            presentAlert: true, presentBadge: true, presentSound: true),
       ),
-      // Inexact mode fixes crashes on Android 13/14 missing exact alarm permissions
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
@@ -133,7 +144,8 @@ class NotificationService {
             icon: 'ic_notif',
             importance: Importance.max,
             priority: Priority.high),
-        iOS: DarwinNotificationDetails(presentSound: true),
+        iOS: DarwinNotificationDetails(
+            presentAlert: true, presentBadge: true, presentSound: true),
       ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
@@ -326,7 +338,6 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    // Gesture Detector for global keyboard dismissal
     return GestureDetector(
       onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
       child: Scaffold(
@@ -373,8 +384,8 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                     ),
                   ),
-                ).animate().fadeIn(duration: 500.ms).moveY(begin: 50, end: 0),
-              ),
+                ),
+              ).animate().fadeIn(duration: 500.ms).moveY(begin: 50, end: 0),
             ),
           ],
         ),
@@ -507,7 +518,6 @@ Widget _buildTip(
   );
 }
 
-// Helper to pre-load settings inside the Modal
 void _showSettingsSheet(BuildContext context) async {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   final bg = isDark
@@ -515,7 +525,6 @@ void _showSettingsSheet(BuildContext context) async {
       : Colors.white.withValues(alpha: 0.95);
   final textC = getTextColor(context);
 
-  // Time Picker Persistence Fix
   final prefs = await SharedPreferences.getInstance();
   int savedHour = prefs.getInt('quote_hour') ?? 9;
   int savedMinute = prefs.getInt('quote_minute') ?? 0;
@@ -552,15 +561,13 @@ void _showSettingsSheet(BuildContext context) async {
                     style: GoogleFonts.inter(
                         fontSize: 10, letterSpacing: 1.5, color: Colors.grey)),
                 const SizedBox(height: 20),
-
-                // --- Notification Time Setting ---
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text("Quote Notification Time",
                       style: GoogleFonts.inter(
                           fontWeight: FontWeight.bold, color: textC)),
                   subtitle: Text("Currently set to: $timeString",
-                      style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      style: const TextStyle(color: Colors.grey, fontSize: 12)),
                   trailing: Icon(CupertinoIcons.time, color: textC),
                   onTap: () async {
                     final TimeOfDay? picked = await showTimePicker(
@@ -591,15 +598,13 @@ void _showSettingsSheet(BuildContext context) async {
                   },
                 ),
                 const Divider(),
-                // ---------------------------------
-
                 Text("Appearance",
                     style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: textC)),
                 const SizedBox(height: 10),
-                Container(
+                SizedBox(
                   width: double.infinity,
                   child: CupertinoSegmentedControl<ThemeMode>(
                     groupValue: themeNotifier.value,
@@ -692,7 +697,7 @@ void _showSettingsSheet(BuildContext context) async {
 }
 
 // -----------------------------------------------------------------------------
-// 7. FOCUS PAGE (Date Header Fix)
+// 7. FOCUS PAGE
 // -----------------------------------------------------------------------------
 
 class FocusPage extends StatefulWidget {
@@ -873,7 +878,6 @@ class _FocusPageState extends State<FocusPage> {
     _saveTasks();
   }
 
-  // --- PROFILE ---
   Map<String, dynamic> _getRankData(int streak) {
     if (streak >= 100)
       return {'title': 'STOIC MASTER', 'next': 0, 'total': 100, 'prev': 100};
@@ -1067,8 +1071,6 @@ class _FocusPageState extends State<FocusPage> {
                                   shape: BoxShape.circle),
                               child: Icon(CupertinoIcons.settings,
                                   size: 20, color: textC))),
-
-                      // DATE IN HEADER FIX
                       Text(
                           DateFormat('EEEE, d MMM')
                               .format(DateTime.now())
@@ -1078,7 +1080,6 @@ class _FocusPageState extends State<FocusPage> {
                               fontWeight: FontWeight.w700,
                               letterSpacing: 2,
                               color: Colors.grey)),
-
                       GestureDetector(
                           onTap: () => _showProfileSheet(context),
                           child: Container(
@@ -1155,7 +1156,7 @@ class _FocusPageState extends State<FocusPage> {
                             itemBuilder: (context, index) {
                               final task = _tasks[index];
                               return ReorderableDismissibleTaskCard(
-                                key: Key(task['id'].toString()),
+                                cardKey: Key(task['id'].toString()),
                                 task: task,
                                 onToggle: () => _toggleTask(index),
                                 onTap: () => showModalBottomSheet(
@@ -1435,7 +1436,7 @@ class _PomodoroPageState extends State<PomodoroPage> {
               ]),
               const SizedBox(height: 20),
               Text("Cycles: $_cycleCount",
-                  style: TextStyle(
+                  style: const TextStyle(
                       color: Colors.grey, fontWeight: FontWeight.bold)),
             ],
           ),
@@ -1655,63 +1656,70 @@ class _JournalEntrySheetState extends State<JournalEntrySheet> {
         : Colors.white.withValues(alpha: 0.95);
     final textC = isDark ? Colors.white : Colors.black;
 
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(40)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom + 40,
-              top: 30,
-              left: 30,
-              right: 30),
-          decoration: BoxDecoration(color: bg),
-          child: SingleChildScrollView(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Center(
-                      child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(2)))),
-                  const SizedBox(height: 30),
-                  Text("REFLECTION",
-                      style: GoogleFonts.inter(
-                          fontSize: 10,
-                          letterSpacing: 1.5,
-                          color: Colors.grey)),
-                  const SizedBox(height: 20),
-                  _buildInput("1. What went well today?", _c1, textC, isDark),
-                  const SizedBox(height: 20),
-                  _buildInput("2. What went wrong?", _c2, textC, isDark),
-                  const SizedBox(height: 20),
-                  _buildInput("3. What did I learn?", _c3, textC, isDark),
-                  const SizedBox(height: 30),
-                  SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: textC,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16))),
-                          onPressed: () {
-                            if (_c1.text.isNotEmpty ||
-                                _c2.text.isNotEmpty ||
-                                _c3.text.isNotEmpty) {
-                              widget.onSave(_c1.text, _c2.text, _c3.text);
-                              Navigator.pop(context);
-                            }
-                          },
-                          child: Text("Save Entry",
-                              style: TextStyle(
-                                  color:
-                                      isDark ? Colors.black : Colors.white)))),
-                ]),
+    // ΠΡΟΣΘΗΚΗ: Το GestureDetector 'πιάνει' τα αγγίγματα και κλείνει το keyboard
+    return GestureDetector(
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      behavior: HitTestBehavior.opaque,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(40)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 40,
+                top: 30,
+                left: 30,
+                right: 30),
+            decoration: BoxDecoration(color: bg),
+            child: SingleChildScrollView(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Center(
+                        child: Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(2)))),
+                    const SizedBox(height: 30),
+                    Text("REFLECTION",
+                        style: GoogleFonts.inter(
+                            fontSize: 10,
+                            letterSpacing: 1.5,
+                            color: Colors.grey)),
+                    const SizedBox(height: 20),
+                    _buildInput("1. What went well today?", _c1, textC, isDark),
+                    const SizedBox(height: 20),
+                    _buildInput("2. What went wrong?", _c2, textC, isDark),
+                    const SizedBox(height: 20),
+                    _buildInput("3. What did I learn?", _c3, textC, isDark),
+                    const SizedBox(height: 30),
+                    SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: textC,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16))),
+                            onPressed: () {
+                              if (_c1.text.isNotEmpty ||
+                                  _c2.text.isNotEmpty ||
+                                  _c3.text.isNotEmpty) {
+                                widget.onSave(_c1.text, _c2.text, _c3.text);
+                                Navigator.pop(context);
+                              }
+                            },
+                            child: Text("Save Entry",
+                                style: TextStyle(
+                                    color: isDark
+                                        ? Colors.black
+                                        : Colors.white)))),
+                  ]),
+            ),
           ),
         ),
       ),
@@ -1728,6 +1736,8 @@ class _JournalEntrySheetState extends State<JournalEntrySheet> {
       TextField(
           controller: controller,
           maxLines: 3,
+          // ΠΡΟΣΘΗΚΗ: Αναγκάζει το πληκτρολόγιο να δείχνει το "Done" / "Check"
+          textInputAction: TextInputAction.done,
           style: GoogleFonts.inter(fontSize: 14, color: textC),
           decoration: InputDecoration(
               filled: true,
@@ -1835,7 +1845,6 @@ class _HabitsPageState extends State<HabitsPage> {
     }
   }
 
-  // --- LOGIC: Check Interval OR Specific Days ---
   void _checkHabitDays() {
     final now = DateTime.now();
     bool changed = false;
@@ -2118,7 +2127,7 @@ class _HabitsPageState extends State<HabitsPage> {
                         }
 
                         return ReorderableDismissibleTaskCard(
-                          key: Key("habit_${habit['id']}"),
+                          cardKey: Key("habit_${habit['id']}"),
                           task: habit,
                           isHabit: true,
                           extraInfo: freqText,
@@ -2147,28 +2156,27 @@ class ReorderableDismissibleTaskCard extends StatelessWidget {
   final VoidCallback onDelete;
   final bool isHabit;
   final String? extraInfo;
+  final Key cardKey; // <-- Το νέο όνομα που μας σώζει από το warning
 
   const ReorderableDismissibleTaskCard(
-      {required Key key,
+      {super.key,
+      required this.cardKey,
       required this.task,
       required this.onToggle,
       required this.onTap,
       required this.onDelete,
       this.isHabit = false,
-      this.extraInfo})
-      : super(key: key);
+      this.extraInfo});
 
   @override
   Widget build(BuildContext context) {
     final colorVal = task['color'] ?? Colors.white.value;
     final bgColor = getCardColor(context, colorVal);
 
-    // VISIBILITY FIX: Analyze background brightness to determine text color dynamically
     final bool isDarkBg =
         ThemeData.estimateBrightnessForColor(bgColor) == Brightness.dark;
     final Color contentColor = isDarkBg ? Colors.white : Colors.black;
 
-    // Visual Priority Indicator
     final int priority = task['priority'] ?? 0;
     Color priorityColor = Colors.transparent;
     if (priority == 1) priorityColor = Colors.blue;
@@ -2177,7 +2185,8 @@ class ReorderableDismissibleTaskCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       child: Dismissible(
-        key: key!,
+        // Χρησιμοποιούμε το cardKey χωρίς θαυμαστικό!
+        key: cardKey,
         direction: DismissDirection.endToStart,
         background: Container(
             alignment: Alignment.centerRight,
@@ -2202,7 +2211,6 @@ class ReorderableDismissibleTaskCard extends StatelessWidget {
                       offset: const Offset(0, 4))
                 ]),
             child: Row(children: [
-              // Priority Dot
               if (priority > 0 && !task['isDone'])
                 Padding(
                   padding: const EdgeInsets.only(right: 8.0),
@@ -2306,8 +2314,8 @@ class TaskDetailSheet extends StatefulWidget {
   final String? initialTime;
   final int initialFrequency;
   final int initialPriority;
-  final String initialRepeatType; // Habit Persist Fix
-  final List<int> initialWeekdays; // Habit Persist Fix
+  final String initialRepeatType;
+  final List<int> initialWeekdays;
   final bool isHabit;
   final bool isNew;
   final Function(String, String, int, String?, int,
@@ -2364,7 +2372,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         : Colors.white.withValues(alpha: 0.95);
     final textC = isDark ? Colors.white : Colors.black;
 
-    // Visibility fix for unselected buttons inside segmented controls
     final Color selectedThumbColor = isDark ? Colors.white : Colors.black;
     final Color unselectedTextColor = isDark ? Colors.white : Colors.black;
     final Color selectedTextColor = isDark ? Colors.black : Colors.white;
@@ -2412,7 +2419,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                             widget.isNew ? "What needs to be done?" : null,
                         hintStyle: const TextStyle(color: Colors.grey))),
                 const SizedBox(height: 20),
-
                 if (!widget.isHabit) ...[
                   Text("PRIORITY",
                       style: GoogleFonts.inter(
@@ -2453,13 +2459,12 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                                         : unselectedTextColor))),
                       },
                       onValueChanged: (val) {
-                        setState(() => _selectedPriority = val!);
+                        setState(() => _selectedPriority = val);
                       },
                     ),
                   ),
                   const SizedBox(height: 20),
                 ],
-
                 if (widget.isHabit) ...[
                   Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2579,7 +2584,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                                                 blurRadius: 6)
                                           ]
                                         : []),
-                                // Checkmark contrast fix
                                 child: _selectedColor == c.value
                                     ? Icon(Icons.check,
                                         size: 16,
@@ -2592,8 +2596,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                                     : null)))
                         .toList()),
                 const SizedBox(height: 20),
-
-                // NOTIFICATION TIME FOR BOTH TASKS AND HABITS
                 Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -2635,7 +2637,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                           child: const Text("Clear",
                               style:
                                   TextStyle(color: Colors.red, fontSize: 12)))),
-
                 const SizedBox(height: 30),
                 SizedBox(
                     width: double.infinity,
