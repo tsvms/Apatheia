@@ -236,10 +236,13 @@ void main() async {
     int qHour = prefs.getInt('quote_hour') ?? 9;
     int qMinute = prefs.getInt('quote_minute') ?? 0;
 
+    // ΔΙΟΡΘΩΣΗ QUOTE: Επιλέγει ένα τυχαίο Quote και το βάζει στην ειδοποίηση
+    String randomQuote = kQuotes[Random().nextInt(kQuotes.length)];
+
     NotificationService.scheduleDaily(
         id: 888,
         title: "Daily Wisdom",
-        body: "Start your day with clarity. Read your daily quote.",
+        body: randomQuote, // Το body είναι πλέον το ίδιο το Quote
         hour: qHour,
         minute: qMinute);
 
@@ -460,24 +463,18 @@ void _showTutorialSheet(BuildContext context) {
               Icon(CupertinoIcons.sparkles,
                   size: 50, color: isDark ? Colors.white : Colors.black),
               const SizedBox(height: 20),
-              Text("WELCOME TO APATHEIA",
+              Text("HOW APATHEIA WORKS",
                   style: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 2)),
               const SizedBox(height: 40),
-              _buildTip(context, CupertinoIcons.settings, "TOP LEFT",
-                  "Access Settings & Customization."),
-              _buildTip(context, Icons.local_fire_department, "TOP RIGHT",
-                  "View your Stoic Rank & Stats."),
-              _buildTip(context, Icons.touch_app, "LONG PRESS",
-                  "Reorder your tasks & habits."),
-              _buildTip(context, CupertinoIcons.repeat, "HABITS",
-                  "Set Interval or Specific Days."),
-              _buildTip(context, CupertinoIcons.book, "JOURNAL",
-                  "Reflect once a day."),
-              _buildTip(context, CupertinoIcons.timer, "POMODORO",
-                  "Tap 'Adjust' to change timer."),
+              _buildTip(context, Icons.local_fire_department, "STOIC RANK",
+                  "Complete at least one task daily to maintain your global streak and rank up."),
+              _buildTip(context, CupertinoIcons.repeat, "HABIT STREAKS",
+                  "Set intervals or specific days. Miss a scheduled day, and that habit's streak resets."),
+              _buildTip(context, CupertinoIcons.book, "REFLECTION",
+                  "You are limited to one journal entry per day to build mindful discipline."),
               const SizedBox(height: 40),
               SizedBox(
                 width: double.infinity,
@@ -488,7 +485,7 @@ void _showTutorialSheet(BuildContext context) {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16))),
                   onPressed: () => Navigator.pop(context),
-                  child: Text("BEGIN",
+                  child: Text("GOT IT",
                       style: TextStyle(
                           color: isDark ? Colors.black : Colors.white,
                           fontWeight: FontWeight.bold)),
@@ -594,12 +591,16 @@ void _showSettingsSheet(BuildContext context) async {
                         savedHour = picked.hour;
                         savedMinute = picked.minute;
                       });
+
+                      // ΔΙΟΡΘΩΣΗ QUOTE: Το ίδιο και εδώ όταν ο χρήστης αλλάζει την ώρα
+                      String randomQuote =
+                          kQuotes[Random().nextInt(kQuotes.length)];
+
                       await NotificationService.cancel(888);
                       await NotificationService.scheduleDaily(
                           id: 888,
                           title: "Daily Wisdom",
-                          body:
-                              "Start your day with clarity. Read your daily quote.",
+                          body: randomQuote,
                           hour: picked.hour,
                           minute: picked.minute);
                       if (!context.mounted) return;
@@ -1169,7 +1170,7 @@ class _FocusPageState extends State<FocusPage> {
                             itemBuilder: (context, index) {
                               final task = _tasks[index];
                               return ReorderableDismissibleTaskCard(
-                                key: Key('task_${task['id']}'),
+                                key: Key(task['id'].toString()),
                                 task: task,
                                 onToggle: () => _toggleTask(index),
                                 onTap: () => showModalBottomSheet(
