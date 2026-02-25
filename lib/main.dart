@@ -79,7 +79,8 @@ class NotificationService {
     final String timeZoneName = timeZoneInfo.identifier;
     tz.setLocalLocation(tz.getLocation(timeZoneName));
 
-    const androidSettings = AndroidInitializationSettings('ic_notif');
+    // ΔΙΟΡΘΩΣΗ ΓΙΑ ANDROID (Λευκή Οθόνη): Χρησιμοποιούμε το mipmap/ic_launcher
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     final iosSettings = DarwinInitializationSettings();
 
     final settings =
@@ -111,9 +112,8 @@ class NotificationService {
       const NotificationDetails(
         android: AndroidNotificationDetails(
             'main_channel', 'Main Notifications',
-            icon: 'ic_notif',
             importance: Importance.max,
-            priority: Priority.high),
+            priority: Priority.high), // Αφαιρέθηκε το ic_notif
         iOS: DarwinNotificationDetails(
             presentAlert: true, presentBadge: true, presentSound: true),
       ),
@@ -137,9 +137,8 @@ class NotificationService {
       _nextInstanceOfTime(hour, minute),
       const NotificationDetails(
         android: AndroidNotificationDetails('daily_channel', 'Daily Reminders',
-            icon: 'ic_notif',
             importance: Importance.max,
-            priority: Priority.high),
+            priority: Priority.high), // Αφαιρέθηκε το ic_notif
         iOS: DarwinNotificationDetails(
             presentAlert: true, presentBadge: true, presentSound: true),
       ),
@@ -210,40 +209,57 @@ Color getTextColor(BuildContext context) {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await NotificationService.init();
-  await _loadSettings();
+
+  // ΑΣΠΙΔΑ 1: Αρχικοποίηση Ειδοποιήσεων
+  try {
+    await NotificationService.init();
+  } catch (e) {
+    debugPrint("Notification Init Error: $e");
+  }
+
+  // ΑΣΠΙΔΑ 2: Φόρτωση Ρυθμίσεων (Theme & Haptics)
+  try {
+    await _loadSettings();
+  } catch (e) {
+    debugPrint("Settings Init Error: $e");
+  }
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
   ));
 
-  final prefs = await SharedPreferences.getInstance();
-  int qHour = prefs.getInt('quote_hour') ?? 9;
-  int qMinute = prefs.getInt('quote_minute') ?? 0;
+  // ΑΣΠΙΔΑ 3: Προγραμματισμός Καθημερινών Ειδοποιήσεων
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    int qHour = prefs.getInt('quote_hour') ?? 9;
+    int qMinute = prefs.getInt('quote_minute') ?? 0;
 
-  // Motivational / Enriched Notifications
-  NotificationService.scheduleDaily(
-      id: 888,
-      title: "Daily Wisdom",
-      body: "Start your day with clarity. Read your daily quote.",
-      hour: qHour,
-      minute: qMinute);
+    NotificationService.scheduleDaily(
+        id: 888,
+        title: "Daily Wisdom",
+        body: "Start your day with clarity. Read your daily quote.",
+        hour: qHour,
+        minute: qMinute);
 
-  NotificationService.scheduleDaily(
-      id: 889,
-      title: "Stay Disciplined",
-      body: "Don't let the streak end, add a task for today!",
-      hour: 18,
-      minute: 0);
+    NotificationService.scheduleDaily(
+        id: 889,
+        title: "Stay Disciplined",
+        body: "Don't let the streak end, add a task for today!",
+        hour: 18,
+        minute: 0);
 
-  NotificationService.scheduleDaily(
-      id: 890,
-      title: "Evening Reflection",
-      body: "Time to review your day.",
-      hour: 20,
-      minute: 0);
+    NotificationService.scheduleDaily(
+        id: 890,
+        title: "Evening Reflection",
+        body: "Time to review your day.",
+        hour: 20,
+        minute: 0);
+  } catch (e) {
+    debugPrint("Scheduling Error: $e");
+  }
 
+  // Το UI θα φορτώσει ΣΙΓΟΥΡΑ, ό,τι κι αν έχει συμβεί στο παρασκήνιο!
   runApp(const MinimalApp());
 }
 
@@ -1152,7 +1168,7 @@ class _FocusPageState extends State<FocusPage> {
                             itemBuilder: (context, index) {
                               final task = _tasks[index];
                               return ReorderableDismissibleTaskCard(
-                                key: Key('task_${task['id']}'),
+                                key: Key(task['id'].toString()),
                                 task: task,
                                 onToggle: () => _toggleTask(index),
                                 onTap: () => showModalBottomSheet(
@@ -1212,7 +1228,7 @@ class _PomodoroPageState extends State<PomodoroPage>
   bool _isActive = false;
   int _cycleCount = 0;
 
-  DateTime? _targetTime; // Καταγράφει πότε πρέπει να τελειώσει το timer
+  DateTime? _targetTime;
 
   @override
   void initState() {
@@ -1228,13 +1244,11 @@ class _PomodoroPageState extends State<PomodoroPage>
     super.dispose();
   }
 
-  // --- BACKGROUND FIX ---
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed &&
         _isActive &&
         _targetTime != null) {
-      // Όταν επιστρέφει στην εφαρμογή, υπολογίζει πόσος χρόνος έμεινε πραγματικά
       final now = DateTime.now();
       if (now.isAfter(_targetTime!)) {
         _timeLeft = 0;
@@ -1250,8 +1264,7 @@ class _PomodoroPageState extends State<PomodoroPage>
   void _toggleTimer() {
     if (_isActive) {
       _timer?.cancel();
-      NotificationService.cancel(
-          999); // Ακυρώνει την ειδοποίηση αν το κάνεις Pause
+      NotificationService.cancel(999);
       setState(() {
         _isActive = false;
         _targetTime = null;
@@ -1262,7 +1275,6 @@ class _PomodoroPageState extends State<PomodoroPage>
         _targetTime = DateTime.now().add(Duration(seconds: _timeLeft));
       });
 
-      // Βάζει ειδοποίηση για να χτυπήσει ακριβώς τη στιγμή που τελειώνει!
       NotificationService.scheduleNotification(
         id: 999,
         title: _mode == PomodoroMode.focus
@@ -2413,7 +2425,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
     final Color unselectedTextColor = isDark ? Colors.white : Colors.black;
     final Color selectedTextColor = isDark ? Colors.black : Colors.white;
 
-    // ΠΡΟΣΘΗΚΗ: Το GestureDetector και εδώ για να κλείνει το keyboard
     return GestureDetector(
       onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
       behavior: HitTestBehavior.opaque,
@@ -2446,13 +2457,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                           ? (widget.isHabit ? "NEW HABIT" : "NEW TASK")
                           : "EDIT",
                       style: GoogleFonts.inter(
-                          fontSize: 10,
-                          letterSpacing: 1.5,
-                          color: Colors.grey)),
+                          fontSize: 10, letterSpacing: 1.5, color: Colors.grey)),
                   TextField(
                       controller: _titleController,
                       autofocus: widget.isNew,
-                      textInputAction: TextInputAction.done, // ΠΡΟΣΘΗΚΗ "Check"
+                      textInputAction: TextInputAction.done,
                       style: GoogleFonts.inter(
                           fontSize: 20,
                           fontWeight: FontWeight.w600,
@@ -2463,6 +2472,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                               widget.isNew ? "What needs to be done?" : null,
                           hintStyle: const TextStyle(color: Colors.grey))),
                   const SizedBox(height: 20),
+
                   if (!widget.isHabit) ...[
                     Text("PRIORITY",
                         style: GoogleFonts.inter(
@@ -2509,6 +2519,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                     ),
                     const SizedBox(height: 20),
                   ],
+
                   if (widget.isHabit) ...[
                     Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2546,8 +2557,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                               itemExtent: 32,
                               scrollController: FixedExtentScrollController(
                                   initialItem: _selectedFrequency - 1),
-                              onSelectedItemChanged: (index) => setState(
-                                  () => _selectedFrequency = index + 1),
+                              onSelectedItemChanged: (index) =>
+                                  setState(() => _selectedFrequency = index + 1),
                               children: List.generate(
                                   30,
                                   (index) => Center(
@@ -2593,12 +2604,10 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                   ],
                   Text("TAGS",
                       style: GoogleFonts.inter(
-                          fontSize: 10,
-                          letterSpacing: 1.5,
-                          color: Colors.grey)),
+                          fontSize: 10, letterSpacing: 1.5, color: Colors.grey)),
                   TextField(
                       controller: _tagsController,
-                      textInputAction: TextInputAction.done, // ΠΡΟΣΘΗΚΗ "Check"
+                      textInputAction: TextInputAction.done,
                       style: GoogleFonts.inter(fontSize: 16, color: textC),
                       decoration: const InputDecoration(
                           hintText: "e.g. Work, Gym",
@@ -2607,9 +2616,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                   const SizedBox(height: 20),
                   Text("COLOR",
                       style: GoogleFonts.inter(
-                          fontSize: 10,
-                          letterSpacing: 1.5,
-                          color: Colors.grey)),
+                          fontSize: 10, letterSpacing: 1.5, color: Colors.grey)),
                   const SizedBox(height: 10),
                   Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2645,6 +2652,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                                       : null)))
                           .toList()),
                   const SizedBox(height: 20),
+
                   Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -2656,8 +2664,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                         GestureDetector(
                             onTap: () async {
                               final t = await showTimePicker(
-                                  context: context,
-                                  initialTime: TimeOfDay.now());
+                                  context: context, initialTime: TimeOfDay.now());
                               if (t != null)
                                 setState(() => _selectedTime =
                                     "${t.hour}:${t.minute.toString().padLeft(2, '0')}");
@@ -2683,11 +2690,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                     Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
-                            onPressed: () =>
-                                setState(() => _selectedTime = null),
+                            onPressed: () => setState(() => _selectedTime = null),
                             child: const Text("Clear",
-                                style: TextStyle(
-                                    color: Colors.red, fontSize: 12)))),
+                                style:
+                                    TextStyle(color: Colors.red, fontSize: 12)))),
+
                   const SizedBox(height: 30),
                   SizedBox(
                       width: double.infinity,
@@ -2714,8 +2721,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                           },
                           child: Text(widget.isNew ? "Create" : "Save Changes",
                               style: TextStyle(
-                                  color:
-                                      isDark ? Colors.black : Colors.white)))),
+                                  color: isDark ? Colors.black : Colors.white)))),
                   if (!widget.isNew && widget.onDelete != null) ...[
                     const SizedBox(height: 16),
                     SizedBox(
