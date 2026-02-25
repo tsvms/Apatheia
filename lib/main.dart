@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -23,8 +22,6 @@ final ValueNotifier<bool> hapticsNotifier = ValueNotifier(true);
 
 Future<void> _loadSettings() async {
   final prefs = await SharedPreferences.getInstance();
-
-  // Theme
   final String? themeStr = prefs.getString('theme_mode');
   if (themeStr == 'light')
     themeNotifier.value = ThemeMode.light;
@@ -32,8 +29,6 @@ Future<void> _loadSettings() async {
     themeNotifier.value = ThemeMode.dark;
   else
     themeNotifier.value = ThemeMode.system;
-
-  // Haptics
   hapticsNotifier.value = prefs.getBool('haptics_enabled') ?? true;
 }
 
@@ -73,28 +68,21 @@ class NotificationService {
 
   static Future<void> init() async {
     tz.initializeTimeZones();
-
-    // Σωστό διάβασμα της τοπικής ώρας του κινητού
     final timeZoneInfo = await FlutterTimezone.getLocalTimezone();
     final String timeZoneName = timeZoneInfo.identifier;
     tz.setLocalLocation(tz.getLocation(timeZoneName));
 
-    // ΔΙΟΡΘΩΣΗ ΓΙΑ ANDROID (Λευκή Οθόνη): Χρησιμοποιούμε το mipmap/ic_launcher
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
     final iosSettings = DarwinInitializationSettings();
-
     final settings =
         InitializationSettings(android: androidSettings, iOS: iosSettings);
     await _notifications.initialize(settings);
 
-    // Ζητάμε άδεια για Android (ειδικά για Android 13+)
     _notifications
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
-
-    // Ζητάμε άδεια ρητά για iOS (iPhone)
     _notifications
         .resolvePlatformSpecificImplementation<
             IOSFlutterLocalNotificationsPlugin>()
@@ -113,8 +101,7 @@ class NotificationService {
       const NotificationDetails(
         android: AndroidNotificationDetails(
             'main_channel', 'Main Notifications',
-            importance: Importance.max,
-            priority: Priority.high), // Αφαιρέθηκε το ic_notif
+            importance: Importance.max, priority: Priority.high),
         iOS: DarwinNotificationDetails(
             presentAlert: true, presentBadge: true, presentSound: true),
       ),
@@ -138,8 +125,7 @@ class NotificationService {
       _nextInstanceOfTime(hour, minute),
       const NotificationDetails(
         android: AndroidNotificationDetails('daily_channel', 'Daily Reminders',
-            importance: Importance.max,
-            priority: Priority.high), // Αφαιρέθηκε το ic_notif
+            importance: Importance.max, priority: Priority.high),
         iOS: DarwinNotificationDetails(
             presentAlert: true, presentBadge: true, presentSound: true),
       ),
@@ -148,6 +134,46 @@ class NotificationService {
           UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.time,
     );
+  }
+
+  // ΝΕΟ: Προγραμματίζει τα Quotes για τις επόμενες 7 μέρες με το σωστό ρητό
+  static Future<void> scheduleDailyQuotes(int hour, int minute) async {
+    await _notifications.cancel(888);
+    for (int i = 0; i < 7; i++) {
+      await _notifications.cancel(800 + i);
+    }
+
+    final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
+    tz.TZDateTime firstSchedule =
+        tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+
+    if (firstSchedule.isBefore(now)) {
+      firstSchedule = firstSchedule.add(const Duration(days: 1));
+    }
+
+    for (int i = 0; i < 7; i++) {
+      tz.TZDateTime scheduledDate = firstSchedule.add(Duration(days: i));
+      String quoteForThatDay = getDailyQuote(scheduledDate);
+
+      await _notifications.zonedSchedule(
+        800 + i,
+        "Daily Wisdom",
+        quoteForThatDay,
+        scheduledDate,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+              'daily_channel', 'Daily Reminders',
+              styleInformation: BigTextStyleInformation(''),
+              importance: Importance.max,
+              priority: Priority.high),
+          iOS: DarwinNotificationDetails(
+              presentAlert: true, presentBadge: true, presentSound: true),
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    }
   }
 
   static tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
@@ -184,6 +210,12 @@ const List<Color> kTaskColors = [
   Color(0xFFFFEBEE),
 ];
 
+// Υπολογίζει το σταθερό Quote της ημέρας
+String getDailyQuote(DateTime date) {
+  int daysSinceEpoch = date.difference(DateTime(2024, 1, 1)).inDays.abs();
+  return kQuotes[daysSinceEpoch % kQuotes.length];
+}
+
 bool isSameDay(DateTime d1, DateTime d2) {
   return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
 }
@@ -210,15 +242,11 @@ Color getTextColor(BuildContext context) {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // ΑΣΠΙΔΑ 1: Αρχικοποίηση Ειδοποιήσεων
   try {
     await NotificationService.init();
   } catch (e) {
     debugPrint("Notification Init Error: $e");
   }
-
-  // ΑΣΠΙΔΑ 2: Φόρτωση Ρυθμίσεων (Theme & Haptics)
   try {
     await _loadSettings();
   } catch (e) {
@@ -230,21 +258,12 @@ void main() async {
     statusBarIconBrightness: Brightness.dark,
   ));
 
-  // ΑΣΠΙΔΑ 3: Προγραμματισμός Καθημερινών Ειδοποιήσεων
   try {
     final prefs = await SharedPreferences.getInstance();
     int qHour = prefs.getInt('quote_hour') ?? 9;
     int qMinute = prefs.getInt('quote_minute') ?? 0;
 
-    // ΔΙΟΡΘΩΣΗ QUOTE: Επιλέγει ένα τυχαίο Quote και το βάζει στην ειδοποίηση
-    String randomQuote = kQuotes[Random().nextInt(kQuotes.length)];
-
-    NotificationService.scheduleDaily(
-        id: 888,
-        title: "Daily Wisdom",
-        body: randomQuote, // Το body είναι πλέον το ίδιο το Quote
-        hour: qHour,
-        minute: qMinute);
+    await NotificationService.scheduleDailyQuotes(qHour, qMinute);
 
     NotificationService.scheduleDaily(
         id: 889,
@@ -263,7 +282,6 @@ void main() async {
     debugPrint("Scheduling Error: $e");
   }
 
-  // Το UI θα φορτώσει ΣΙΓΟΥΡΑ, ό,τι κι αν έχει συμβεί στο παρασκήνιο!
   runApp(const MinimalApp());
 }
 
@@ -316,12 +334,11 @@ class MinimalApp extends StatelessWidget {
 }
 
 // -----------------------------------------------------------------------------
-// 5. MAIN SCREEN & NAVIGATION (Keyboard Dismiss Fix)
+// 5. MAIN SCREEN & NAVIGATION
 // -----------------------------------------------------------------------------
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
-
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
@@ -592,17 +609,9 @@ void _showSettingsSheet(BuildContext context) async {
                         savedMinute = picked.minute;
                       });
 
-                      // ΔΙΟΡΘΩΣΗ QUOTE: Το ίδιο και εδώ όταν ο χρήστης αλλάζει την ώρα
-                      String randomQuote =
-                          kQuotes[Random().nextInt(kQuotes.length)];
+                      await NotificationService.scheduleDailyQuotes(
+                          picked.hour, picked.minute);
 
-                      await NotificationService.cancel(888);
-                      await NotificationService.scheduleDaily(
-                          id: 888,
-                          title: "Daily Wisdom",
-                          body: randomQuote,
-                          hour: picked.hour,
-                          minute: picked.minute);
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                           content: Text(
@@ -628,8 +637,7 @@ void _showSettingsSheet(BuildContext context) async {
                     pressedColor: isDark ? Colors.grey[800] : Colors.grey[200],
                     children: {
                       ThemeMode.system: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 10, horizontal: 10),
+                          padding: const EdgeInsets.all(10),
                           child: Text("System",
                               style: TextStyle(
                                   color: themeNotifier.value == ThemeMode.system
@@ -637,8 +645,7 @@ void _showSettingsSheet(BuildContext context) async {
                                       : textC,
                                   fontSize: 13))),
                       ThemeMode.light: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 10, horizontal: 10),
+                          padding: const EdgeInsets.all(10),
                           child: Text("Light",
                               style: TextStyle(
                                   color: themeNotifier.value == ThemeMode.light
@@ -646,8 +653,7 @@ void _showSettingsSheet(BuildContext context) async {
                                       : textC,
                                   fontSize: 13))),
                       ThemeMode.dark: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 10, horizontal: 10),
+                          padding: const EdgeInsets.all(10),
                           child: Text("Dark",
                               style: TextStyle(
                                   color: themeNotifier.value == ThemeMode.dark
@@ -736,7 +742,7 @@ class _FocusPageState extends State<FocusPage> {
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _currentQuote = kQuotes[Random().nextInt(kQuotes.length)];
+      _currentQuote = getDailyQuote(DateTime.now());
       _streakCount = prefs.getInt('global_streak') ?? 0;
       _totalTasksCompleted = prefs.getInt('total_tasks_completed') ?? 0;
       _activityLog = prefs.getStringList('activity_log') ?? [];
@@ -1229,7 +1235,6 @@ class _PomodoroPageState extends State<PomodoroPage>
   Timer? _timer;
   bool _isActive = false;
   int _cycleCount = 0;
-
   DateTime? _targetTime;
 
   @override
@@ -1253,8 +1258,24 @@ class _PomodoroPageState extends State<PomodoroPage>
         _targetTime != null) {
       final now = DateTime.now();
       if (now.isAfter(_targetTime!)) {
-        _timeLeft = 0;
-        _finishCycle();
+        _timer?.cancel();
+        setState(() {
+          _isActive = false;
+          _targetTime = null;
+          if (_mode == PomodoroMode.focus) {
+            _cycleCount++;
+            if (_cycleCount % 4 == 0) {
+              _mode = PomodoroMode.longBreak;
+              _timeLeft = 15 * 60;
+            } else {
+              _mode = PomodoroMode.shortBreak;
+              _timeLeft = 5 * 60;
+            }
+          } else {
+            _mode = PomodoroMode.focus;
+            _timeLeft = _userFocusTime * 60;
+          }
+        });
       } else {
         setState(() {
           _timeLeft = _targetTime!.difference(now).inSeconds;
@@ -2235,7 +2256,6 @@ class _HabitsPageState extends State<HabitsPage> {
             }
           }
         }
-
         if (increment) {
           habit['streak'] = (habit['streak'] ?? 0) + 1;
           habit['lastDoneDate'] = now.toIso8601String();
@@ -2320,7 +2340,6 @@ class _HabitsPageState extends State<HabitsPage> {
                           final freq = habit['frequency'] ?? 1;
                           if (freq > 1) freqText = "Every $freq days";
                         }
-
                         return ReorderableDismissibleTaskCard(
                           key: Key("habit_${habit['id']}"),
                           task: habit,
@@ -2365,7 +2384,6 @@ class ReorderableDismissibleTaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorVal = task['color'] ?? Colors.white.value;
     final bgColor = getCardColor(context, colorVal);
-
     final bool isDarkBg =
         ThemeData.estimateBrightnessForColor(bgColor) == Brightness.dark;
     final Color contentColor = isDarkBg ? Colors.white : Colors.black;
@@ -2405,14 +2423,12 @@ class ReorderableDismissibleTaskCard extends StatelessWidget {
             child: Row(children: [
               if (priority > 0 && !task['isDone'])
                 Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                        color: priorityColor, shape: BoxShape.circle),
-                  ),
-                ),
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                            color: priorityColor, shape: BoxShape.circle))),
               GestureDetector(
                   onTap: onToggle,
                   child: AnimatedContainer(
