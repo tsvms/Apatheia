@@ -80,7 +80,8 @@ class NotificationService {
     tz.setLocalLocation(tz.getLocation(timeZoneName));
 
     // ΔΙΟΡΘΩΣΗ ΓΙΑ ANDROID (Λευκή Οθόνη): Χρησιμοποιούμε το mipmap/ic_launcher
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     final iosSettings = DarwinInitializationSettings();
 
     final settings =
@@ -1168,7 +1169,7 @@ class _FocusPageState extends State<FocusPage> {
                             itemBuilder: (context, index) {
                               final task = _tasks[index];
                               return ReorderableDismissibleTaskCard(
-                                key: Key(task['id'].toString()),
+                                key: Key('task_${task['id']}'),
                                 task: task,
                                 onToggle: () => _toggleTask(index),
                                 onTap: () => showModalBottomSheet(
@@ -1545,9 +1546,126 @@ class _JournalPageState extends State<JournalPage> {
     _saveEntries();
   }
 
+  void _updateEntry(int index, String q1, String q2, String q3) {
+    setState(() {
+      _entries[index]['q1'] = q1;
+      _entries[index]['q2'] = q2;
+      _entries[index]['q3'] = q3;
+    });
+    _saveEntries();
+  }
+
   void _deleteEntry(int index) {
     setState(() => _entries.removeAt(index));
     _saveEntries();
+  }
+
+  void _showReadEntrySheet(
+      BuildContext context, int index, Map<String, dynamic> entry) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark
+        ? const Color(0xFF1C1C1E).withValues(alpha: 0.95)
+        : Colors.white.withValues(alpha: 0.95);
+    final textC = isDark ? Colors.white : Colors.black;
+    final date = DateTime.parse(entry['date']);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(40)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.all(30),
+            decoration: BoxDecoration(color: bg),
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                      child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                              color: Colors.grey[300],
+                              borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 30),
+                  Text(
+                      DateFormat('EEEE, d MMM yyyy').format(date).toUpperCase(),
+                      style: GoogleFonts.inter(
+                          fontSize: 10,
+                          letterSpacing: 1.5,
+                          color: Colors.grey)),
+                  const SizedBox(height: 20),
+                  _buildQA("1. What went well today?", entry['q1'], textC),
+                  const SizedBox(height: 16),
+                  _buildQA("2. What went wrong?", entry['q2'], textC),
+                  const SizedBox(height: 16),
+                  _buildQA("3. What did I learn?", entry['q3'], textC),
+                  const SizedBox(height: 40),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _deleteEntry(index);
+                            performHaptic(HapticFeedbackType.medium);
+                          },
+                          icon: const Icon(CupertinoIcons.trash,
+                              color: Colors.red, size: 18),
+                          label: const Text("Delete",
+                              style: TextStyle(color: Colors.red)),
+                          style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              side: const BorderSide(color: Colors.red),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16))),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (context) => JournalEntrySheet(
+                                initialQ1: entry['q1'],
+                                initialQ2: entry['q2'],
+                                initialQ3: entry['q3'],
+                                onSave: (q1, q2, q3) =>
+                                    _updateEntry(index, q1, q2, q3),
+                              ),
+                            );
+                          },
+                          icon: Icon(CupertinoIcons.pen,
+                              color: isDark ? Colors.black : Colors.white,
+                              size: 18),
+                          label: Text("Edit",
+                              style: TextStyle(
+                                  color: isDark ? Colors.black : Colors.white)),
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: textC,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16))),
+                        ),
+                      ),
+                    ],
+                  )
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -1631,39 +1749,45 @@ class _JournalPageState extends State<JournalPage> {
                               child: const Icon(CupertinoIcons.trash,
                                   color: Colors.red)),
                           onDismissed: (_) => _deleteEntry(index),
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 16),
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                                color: isDark
-                                    ? const Color(0xFF1C1C1E)
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                      color:
-                                          Colors.black.withValues(alpha: 0.05),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4))
-                                ]),
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                      DateFormat('EEEE, d MMM yyyy')
-                                          .format(date),
-                                      style: GoogleFonts.inter(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.grey)),
-                                  const SizedBox(height: 12),
-                                  _buildQA(
-                                      "What went well?", entry['q1'], textC),
-                                  _buildQA(
-                                      "What went wrong?", entry['q2'], textC),
-                                  _buildQA(
-                                      "What did I learn?", entry['q3'], textC),
-                                ]),
+                          child: GestureDetector(
+                            onTap: () {
+                              performHaptic(HapticFeedbackType.light);
+                              _showReadEntrySheet(context, index, entry);
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 16),
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                  color: isDark
+                                      ? const Color(0xFF1C1C1E)
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                        color: Colors.black
+                                            .withValues(alpha: 0.05),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4))
+                                  ]),
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                        DateFormat('EEEE, d MMM yyyy')
+                                            .format(date),
+                                        style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.grey)),
+                                    const SizedBox(height: 12),
+                                    _buildQA(
+                                        "What went well?", entry['q1'], textC),
+                                    _buildQA(
+                                        "What went wrong?", entry['q2'], textC),
+                                    _buildQA("What did I learn?", entry['q3'],
+                                        textC),
+                                  ]),
+                            ),
                           ),
                         );
                       },
@@ -1691,16 +1815,34 @@ class _JournalPageState extends State<JournalPage> {
 }
 
 class JournalEntrySheet extends StatefulWidget {
+  final String initialQ1;
+  final String initialQ2;
+  final String initialQ3;
   final Function(String, String, String) onSave;
-  const JournalEntrySheet({super.key, required this.onSave});
+
+  const JournalEntrySheet(
+      {super.key,
+      this.initialQ1 = "",
+      this.initialQ2 = "",
+      this.initialQ3 = "",
+      required this.onSave});
+
   @override
   State<JournalEntrySheet> createState() => _JournalEntrySheetState();
 }
 
 class _JournalEntrySheetState extends State<JournalEntrySheet> {
-  final _c1 = TextEditingController();
-  final _c2 = TextEditingController();
-  final _c3 = TextEditingController();
+  late final TextEditingController _c1;
+  late final TextEditingController _c2;
+  late final TextEditingController _c3;
+
+  @override
+  void initState() {
+    super.initState();
+    _c1 = TextEditingController(text: widget.initialQ1);
+    _c2 = TextEditingController(text: widget.initialQ2);
+    _c3 = TextEditingController(text: widget.initialQ3);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2457,7 +2599,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                           ? (widget.isHabit ? "NEW HABIT" : "NEW TASK")
                           : "EDIT",
                       style: GoogleFonts.inter(
-                          fontSize: 10, letterSpacing: 1.5, color: Colors.grey)),
+                          fontSize: 10,
+                          letterSpacing: 1.5,
+                          color: Colors.grey)),
                   TextField(
                       controller: _titleController,
                       autofocus: widget.isNew,
@@ -2472,7 +2616,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                               widget.isNew ? "What needs to be done?" : null,
                           hintStyle: const TextStyle(color: Colors.grey))),
                   const SizedBox(height: 20),
-
                   if (!widget.isHabit) ...[
                     Text("PRIORITY",
                         style: GoogleFonts.inter(
@@ -2519,7 +2662,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                     ),
                     const SizedBox(height: 20),
                   ],
-
                   if (widget.isHabit) ...[
                     Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2557,8 +2699,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                               itemExtent: 32,
                               scrollController: FixedExtentScrollController(
                                   initialItem: _selectedFrequency - 1),
-                              onSelectedItemChanged: (index) =>
-                                  setState(() => _selectedFrequency = index + 1),
+                              onSelectedItemChanged: (index) => setState(
+                                  () => _selectedFrequency = index + 1),
                               children: List.generate(
                                   30,
                                   (index) => Center(
@@ -2604,7 +2746,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                   ],
                   Text("TAGS",
                       style: GoogleFonts.inter(
-                          fontSize: 10, letterSpacing: 1.5, color: Colors.grey)),
+                          fontSize: 10,
+                          letterSpacing: 1.5,
+                          color: Colors.grey)),
                   TextField(
                       controller: _tagsController,
                       textInputAction: TextInputAction.done,
@@ -2616,7 +2760,9 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                   const SizedBox(height: 20),
                   Text("COLOR",
                       style: GoogleFonts.inter(
-                          fontSize: 10, letterSpacing: 1.5, color: Colors.grey)),
+                          fontSize: 10,
+                          letterSpacing: 1.5,
+                          color: Colors.grey)),
                   const SizedBox(height: 10),
                   Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2652,7 +2798,6 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                                       : null)))
                           .toList()),
                   const SizedBox(height: 20),
-
                   Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -2664,7 +2809,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                         GestureDetector(
                             onTap: () async {
                               final t = await showTimePicker(
-                                  context: context, initialTime: TimeOfDay.now());
+                                  context: context,
+                                  initialTime: TimeOfDay.now());
                               if (t != null)
                                 setState(() => _selectedTime =
                                     "${t.hour}:${t.minute.toString().padLeft(2, '0')}");
@@ -2690,11 +2836,11 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                     Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
-                            onPressed: () => setState(() => _selectedTime = null),
+                            onPressed: () =>
+                                setState(() => _selectedTime = null),
                             child: const Text("Clear",
-                                style:
-                                    TextStyle(color: Colors.red, fontSize: 12)))),
-
+                                style: TextStyle(
+                                    color: Colors.red, fontSize: 12)))),
                   const SizedBox(height: 30),
                   SizedBox(
                       width: double.infinity,
@@ -2721,7 +2867,8 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                           },
                           child: Text(widget.isNew ? "Create" : "Save Changes",
                               style: TextStyle(
-                                  color: isDark ? Colors.black : Colors.white)))),
+                                  color:
+                                      isDark ? Colors.black : Colors.white)))),
                   if (!widget.isNew && widget.onDelete != null) ...[
                     const SizedBox(height: 16),
                     SizedBox(
