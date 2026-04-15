@@ -12,6 +12,7 @@ dependencies:
   # Ειδοποιήσεις & Ώρα
   flutter_local_notifications: ^17.0.0
   timezone: ^0.9.2
+  flutter_timezone: ^5.0.1
   # Αποθήκευση
   shared_preferences: ^2.2.2
   # Design & Animations
@@ -20,7 +21,6 @@ dependencies:
   intl: ^0.19.0
   # Icons
   cupertino_icons: ^1.0.6
-  flutter_timezone: ^5.0.1
 
 dev_dependencies:
   flutter_test:
@@ -31,16 +31,16 @@ dev_dependencies:
 
 # Ρυθμίσεις για τα εικονίδια
 flutter_launcher_icons:
-  android: true
+  android: "launcher_icon"
   ios: true
-  image_path: "assets/logo.png" 
+  image_path: "assets/logo.png" # <--- ΑΛΛΑΞΕ ΤΟ ΟΝΟΜΑ ΕΔΩ
   adaptive_icon_background: "#bc955c" 
-  adaptive_icon_foreground: "assets/ic_notif.png" 
+  adaptive_icon_foreground: "assets/logo_transparent.png" # <--- ΑΛΛΑΞΕ ΤΟ ΟΝΟΜΑ ΕΔΩ
 
 flutter:
   uses-material-design: true
   
   # Δήλωση των assets
   assets:
-    - assets/logo.png
-    - assets/ic_notif.png
+    - assets/logo.png # <--- ΒΑΛΕ ΤΟ ΙΔΙΟ ΟΝΟΜΑ ΕΔΩ
+    - assets/logo_transparent.png # <--- ΒΑΛΕ ΤΟ ΙΔΙΟ ΟΝΟΜΑ ΕΔΩ

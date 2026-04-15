@@ -73,7 +73,7 @@ class NotificationService {
     tz.setLocalLocation(tz.getLocation(timeZoneName));
 
     const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@mipmap/launcher_icon');
     final iosSettings = DarwinInitializationSettings();
     final settings =
         InitializationSettings(android: androidSettings, iOS: iosSettings);
@@ -136,7 +136,6 @@ class NotificationService {
     );
   }
 
-  // ΝΕΟ: Προγραμματίζει τα Quotes για τις επόμενες 7 μέρες με το σωστό ρητό
   static Future<void> scheduleDailyQuotes(int hour, int minute) async {
     await _notifications.cancel(888);
     for (int i = 0; i < 7; i++) {
@@ -210,7 +209,6 @@ const List<Color> kTaskColors = [
   Color(0xFFFFEBEE),
 ];
 
-// Υπολογίζει το σταθερό Quote της ημέρας
 String getDailyQuote(DateTime date) {
   int daysSinceEpoch = date.difference(DateTime(2024, 1, 1)).inDays.abs();
   return kQuotes[daysSinceEpoch % kQuotes.length];
@@ -418,7 +416,7 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                   ),
                 ),
-              ).animate().fadeIn(duration: 500.ms).moveY(begin: 50, end: 0),
+              ).animate().fadeIn(duration: 500.ms).moveY(begin: 50.0, end: 0.0),
             ),
           ],
         ),
@@ -434,21 +432,26 @@ class _MainScreenState extends State<MainScreen> {
         setState(() => _selectedIndex = index);
         performHaptic(HapticFeedbackType.light);
       },
-      child: AnimatedContainer(
+      child: AnimatedScale(
+        scale: isSelected ? 1.15 : 1.0,
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOutBack,
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-            color: isSelected
-                ? (isDark ? Colors.white : Colors.black)
-                : Colors.transparent,
-            shape: BoxShape.circle),
-        child: Icon(icon,
-            color: isSelected
-                ? (isDark ? Colors.black : Colors.white)
-                : (isDark ? Colors.grey[600] : Colors.grey[400]),
-            size: 24),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutBack,
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+              color: isSelected
+                  ? (isDark ? Colors.white : Colors.black)
+                  : Colors.transparent,
+              shape: BoxShape.circle),
+          child: Icon(icon,
+              color: isSelected
+                  ? (isDark ? Colors.black : Colors.white)
+                  : (isDark ? Colors.grey[600] : Colors.grey[400]),
+              size: 24),
+        ),
       ),
     );
   }
@@ -781,6 +784,19 @@ class _FocusPageState extends State<FocusPage> {
       _tasks.insert(newIndex, item);
     });
     _saveTasks();
+  }
+
+  // ΝΕΑ ΛΕΙΤΟΥΡΓΙΑ: Sort by Priority
+  void _sortByPriority() {
+    setState(() {
+      _tasks.sort((a, b) {
+        int priorityA = a['priority'] ?? 0;
+        int priorityB = b['priority'] ?? 0;
+        return priorityB.compareTo(priorityA); // Τα High (2) πάνε πάνω
+      });
+    });
+    _saveTasks();
+    performHaptic(HapticFeedbackType.light);
   }
 
   Future<void> _logActivity() async {
@@ -1129,7 +1145,40 @@ class _FocusPageState extends State<FocusPage> {
                               color: textC))
                       .animate()
                       .fadeIn(duration: 800.ms)
-                      .moveY(begin: 20, end: 0),
+                      .moveY(begin: 20.0, end: 0.0),
+
+                  const SizedBox(height: 20),
+                  // ΤΟ ΝΕΟ ΚΟΥΜΠΙ SORT BY PRIORITY
+                  if (_tasks.isNotEmpty)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: GestureDetector(
+                        onTap: _sortByPriority,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.grey[800]?.withValues(alpha: 0.5)
+                                : Colors.grey[200]?.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(CupertinoIcons.sort_down,
+                                  size: 14, color: textC),
+                              const SizedBox(width: 6),
+                              Text("Sort",
+                                  style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: textC)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ).animate().fadeIn(duration: 400.ms),
                 ],
               ),
             ),
@@ -1158,12 +1207,24 @@ class _FocusPageState extends State<FocusPage> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                 Icon(CupertinoIcons.check_mark_circled,
-                                    size: 48, color: Colors.grey),
+                                    size: 48,
+                                    color: Colors.grey.withValues(alpha: 0.5)),
                                 const SizedBox(height: 16),
                                 Text("Empty mind.\nPeaceful life.",
                                     textAlign: TextAlign.center,
                                     style: GoogleFonts.inter(
-                                        color: Colors.grey, fontSize: 16))
+                                        color: Colors.grey, fontSize: 16)),
+                                const SizedBox(height: 30),
+                                Icon(CupertinoIcons.arrow_down,
+                                        color:
+                                            Colors.grey.withValues(alpha: 0.3))
+                                    .animate(
+                                        onPlay: (controller) =>
+                                            controller.repeat(reverse: true))
+                                    .moveY(
+                                        begin: -5.0,
+                                        end: 5.0,
+                                        duration: 1.seconds),
                               ]))
                         : ReorderableListView.builder(
                             padding: const EdgeInsets.only(
@@ -1216,7 +1277,7 @@ class _FocusPageState extends State<FocusPage> {
 }
 
 // -----------------------------------------------------------------------------
-// 8. POMODORO PAGE (Background Fix + Notifications)
+// 8. POMODORO PAGE (Final Clean Version)
 // -----------------------------------------------------------------------------
 
 enum PomodoroMode { focus, shortBreak, longBreak }
@@ -1411,51 +1472,75 @@ class _PomodoroPageState extends State<PomodoroPage>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textC = isDark ? Colors.white : Colors.black;
+    final double progress = 1 -
+        (_timeLeft /
+            (_mode == PomodoroMode.focus
+                ? (_userFocusTime * 60)
+                : (_mode == PomodoroMode.longBreak ? 900 : 300)));
 
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(32.0),
+          padding: const EdgeInsets.only(
+              left: 32.0,
+              right: 32.0,
+              top: 40.0,
+              bottom: 120.0), // Πιο πολύ κενό για το notch/navbar
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(_modeString,
-                  style: GoogleFonts.inter(
-                      fontSize: 14,
-                      letterSpacing: 3,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 50),
+              // 1. Elegant Top Mode Pill (Πιο κεντραρισμένο)
+              const SizedBox(height: 10), // Επιπλέον κενό από το notch
+
+              // 2. Huge Minimalist Timer
               Stack(alignment: Alignment.center, children: [
+                // Mode Pill is now INSIDE the circle group for safety
+                if (_isActive)
+                  Container(
+                    width: 310,
+                    height: 310,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: textC.withValues(alpha: 0.03),
+                    ),
+                  )
+                      .animate(onPlay: (c) => c.repeat(reverse: true))
+                      .scaleXY(begin: 1.0, end: 1.05, duration: 2.seconds),
+
                 SizedBox(
                     width: 280,
                     height: 280,
                     child: CircularProgressIndicator(
-                        value: 1.0,
-                        strokeWidth: 12,
-                        backgroundColor: Colors.transparent,
-                        color: isDark ? Colors.grey[900] : Colors.grey[200],
-                        strokeCap: StrokeCap.round)),
+                      value: 1.0,
+                      strokeWidth: 2,
+                      backgroundColor: Colors.transparent,
+                      color: isDark ? Colors.white10 : Colors.black12,
+                    )),
+
                 SizedBox(
                     width: 280,
                     height: 280,
                     child: CircularProgressIndicator(
-                        value: 1 -
-                            (_timeLeft /
-                                (_mode == PomodoroMode.focus
-                                    ? (_userFocusTime * 60)
-                                    : (_mode == PomodoroMode.longBreak
-                                        ? 900
-                                        : 300))),
-                        strokeWidth: 12,
+                        value: progress,
+                        strokeWidth: 8,
                         backgroundColor: Colors.transparent,
                         color: textC,
                         strokeCap: StrokeCap.round)),
+
                 Column(mainAxisSize: MainAxisSize.min, children: [
+                  // Mode Label inside circle
+                  Text(_modeString,
+                      style: GoogleFonts.inter(
+                          fontSize: 10,
+                          letterSpacing: 2,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 4),
                   Text(_timerString,
                       style: GoogleFonts.inter(
-                          fontSize: 64,
+                          fontSize: 80,
                           fontWeight: FontWeight.w200,
+                          letterSpacing: -2,
                           color: textC)),
                   if (_mode == PomodoroMode.focus && !_isActive)
                     Padding(
@@ -1464,7 +1549,7 @@ class _PomodoroPageState extends State<PomodoroPage>
                             onTap: _changeDuration,
                             child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 6),
+                                    horizontal: 16, vertical: 8),
                                 decoration: BoxDecoration(
                                     color: isDark
                                         ? Colors.grey[800]
@@ -1484,37 +1569,48 @@ class _PomodoroPageState extends State<PomodoroPage>
                                     ])))),
                 ]),
               ]),
-              const SizedBox(height: 60),
+
+              // 3. Modern Controls Row
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 IconButton(
                     onPressed: _resetTimer,
-                    icon: const Icon(Icons.refresh,
-                        size: 36, color: Colors.grey)),
+                    icon: const Icon(CupertinoIcons.refresh,
+                        size: 24, color: Colors.grey)),
                 const SizedBox(width: 40),
                 GestureDetector(
                     onTap: _toggleTimer,
                     child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 40, vertical: 20),
+                        width: 80,
+                        height: 80,
                         decoration: BoxDecoration(
                             color: textC,
-                            borderRadius: BorderRadius.circular(40),
+                            shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.2),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 5))
+                                  color: textC.withValues(alpha: 0.3),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10))
                             ]),
-                        child: Text(_isActive ? "PAUSE" : "START",
-                            style: GoogleFonts.inter(
-                                color: isDark ? Colors.black : Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16)))),
+                        child: Icon(
+                            _isActive
+                                ? CupertinoIcons.pause_solid
+                                : CupertinoIcons.play_arrow_solid,
+                            color: isDark ? Colors.black : Colors.white,
+                            size: 36))),
+                const SizedBox(width: 40),
+                Column(
+                  children: [
+                    const Icon(CupertinoIcons.arrow_2_circlepath,
+                        size: 20, color: Colors.grey),
+                    const SizedBox(height: 4),
+                    Text("$_cycleCount/4",
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                            fontWeight: FontWeight.bold)),
+                  ],
+                ),
               ]),
-              const SizedBox(height: 20),
-              Text("Cycles: $_cycleCount",
-                  style: const TextStyle(
-                      color: Colors.grey, fontWeight: FontWeight.bold)),
             ],
           ),
         ),
@@ -1622,11 +1718,9 @@ class _JournalPageState extends State<JournalPage> {
                           letterSpacing: 1.5,
                           color: Colors.grey)),
                   const SizedBox(height: 20),
-                  _buildQA("1. What went well today?", entry['q1'], textC),
-                  const SizedBox(height: 16),
-                  _buildQA("2. What went wrong?", entry['q2'], textC),
-                  const SizedBox(height: 16),
-                  _buildQA("3. What did I learn?", entry['q3'], textC),
+                  _buildQA("What went well?", entry['q1'], textC, isDark),
+                  _buildQA("What went wrong?", entry['q2'], textC, isDark),
+                  _buildQA("What did I learn?", entry['q3'], textC, isDark),
                   const SizedBox(height: 40),
                   Row(
                     children: [
@@ -1761,54 +1855,74 @@ class _JournalPageState extends State<JournalPage> {
                       itemBuilder: (context, index) {
                         final entry = _entries[index];
                         final date = DateTime.parse(entry['date']);
-                        return Dismissible(
-                          key: Key(entry['date']),
-                          direction: DismissDirection.endToStart,
-                          background: Container(
-                              alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.only(right: 20),
-                              color: Colors.red.withValues(alpha: 0.1),
-                              child: const Icon(CupertinoIcons.trash,
-                                  color: Colors.red)),
-                          onDismissed: (_) => _deleteEntry(index),
-                          child: GestureDetector(
-                            onTap: () {
-                              performHaptic(HapticFeedbackType.light);
-                              _showReadEntrySheet(context, index, entry);
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 16),
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(28),
+                              boxShadow: [
+                                BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.05),
+                                    blurRadius: 15,
+                                    offset: const Offset(0, 8))
+                              ]),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(28),
+                            child: Dismissible(
+                              key: Key(entry['date']),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 24),
+                                color: Colors.red.shade400,
+                                child: const Icon(CupertinoIcons.delete,
+                                    color: Colors.white),
+                              ),
+                              onDismissed: (_) => _deleteEntry(index),
+                              child: GestureDetector(
+                                onTap: () {
+                                  performHaptic(HapticFeedbackType.light);
+                                  _showReadEntrySheet(context, index, entry);
+                                },
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(24),
                                   color: isDark
                                       ? const Color(0xFF1C1C1E)
                                       : Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [
-                                    BoxShadow(
-                                        color: Colors.black
-                                            .withValues(alpha: 0.05),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 4))
-                                  ]),
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                        DateFormat('EEEE, d MMM yyyy')
-                                            .format(date),
-                                        style: GoogleFonts.inter(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.grey)),
-                                    const SizedBox(height: 12),
-                                    _buildQA(
-                                        "What went well?", entry['q1'], textC),
-                                    _buildQA(
-                                        "What went wrong?", entry['q2'], textC),
-                                    _buildQA("What did I learn?", entry['q3'],
-                                        textC),
-                                  ]),
+                                  child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 6),
+                                          decoration: ShapeDecoration(
+                                              color: isDark
+                                                  ? Colors.grey[800]
+                                                  : Colors.grey[100],
+                                              shape: const StadiumBorder()),
+                                          child: Text(
+                                              DateFormat('EEEE, d MMM yyyy')
+                                                  .format(date)
+                                                  .toUpperCase(),
+                                              style: GoogleFonts.inter(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                  letterSpacing: 1.0,
+                                                  color: Colors.grey)),
+                                        ),
+                                        const SizedBox(height: 20),
+                                        _buildQA("What went well?", entry['q1'],
+                                            textC, isDark),
+                                        _buildQA("What went wrong?",
+                                            entry['q2'], textC, isDark),
+                                        _buildQA("What did I learn?",
+                                            entry['q3'], textC, isDark),
+                                      ]),
+                                ),
+                              ),
                             ),
                           ),
                         );
@@ -1821,17 +1935,34 @@ class _JournalPageState extends State<JournalPage> {
     );
   }
 
-  Widget _buildQA(String q, String a, Color textC) {
+  Widget _buildQA(String q, String a, Color textC, bool isDark) {
+    if (a.isEmpty) return const SizedBox.shrink();
     return Padding(
-        padding: const EdgeInsets.only(bottom: 12.0),
+        padding: const EdgeInsets.only(bottom: 16.0),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(q,
-              style: GoogleFonts.inter(
-                  fontSize: 11, fontWeight: FontWeight.w600, color: textC)),
-          const SizedBox(height: 4),
-          Text(a,
-              style: GoogleFonts.inter(
-                  fontSize: 14, color: Colors.grey, height: 1.4))
+          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            Icon(CupertinoIcons.quote_bubble_fill,
+                size: 14, color: Colors.orange.withValues(alpha: 0.8)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(q,
+                  style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: textC.withValues(alpha: 0.6),
+                      letterSpacing: 0.5)),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 22.0),
+            child: Text(a,
+                style: GoogleFonts.lora(
+                    fontSize: 15,
+                    color: isDark ? Colors.white : Colors.black87,
+                    height: 1.5,
+                    fontStyle: FontStyle.italic)),
+          )
         ]));
   }
 }
@@ -2305,12 +2436,21 @@ class _HabitsPageState extends State<HabitsPage> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                           Icon(CupertinoIcons.repeat,
-                              size: 48, color: Colors.grey),
+                              size: 48,
+                              color: Colors.grey.withValues(alpha: 0.5)),
                           const SizedBox(height: 16),
                           Text("No rituals yet.\nDiscipline starts now.",
                               textAlign: TextAlign.center,
                               style: GoogleFonts.inter(
-                                  color: Colors.grey, fontSize: 16))
+                                  color: Colors.grey, fontSize: 16)),
+                          const SizedBox(height: 30),
+                          Icon(CupertinoIcons.arrow_down,
+                                  color: Colors.grey.withValues(alpha: 0.3))
+                              .animate(
+                                  onPlay: (controller) =>
+                                      controller.repeat(reverse: true))
+                              .moveY(
+                                  begin: -5.0, end: 5.0, duration: 1.seconds),
                         ]))
                   : ReorderableListView.builder(
                       padding: const EdgeInsets.only(
@@ -2395,123 +2535,127 @@ class ReorderableDismissibleTaskCard extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Dismissible(
-        key: Key(task['id'].toString()),
-        direction: DismissDirection.endToStart,
-        background: Container(
+      decoration:
+          BoxDecoration(borderRadius: BorderRadius.circular(24), boxShadow: [
+        BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4))
+      ]),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Dismissible(
+          key: Key(task['id'].toString()),
+          direction: DismissDirection.endToStart,
+          background: Container(
             alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(48)),
-            child: const Icon(CupertinoIcons.trash, color: Colors.red)),
-        onDismissed: (_) => onDelete(),
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-            decoration: ShapeDecoration(
-                color: bgColor,
-                shape: ContinuousRectangleBorder(
-                    borderRadius: BorderRadius.circular(48)),
-                shadows: [
-                  BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4))
-                ]),
-            child: Row(children: [
-              if (priority > 0 && !task['isDone'])
-                Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                            color: priorityColor, shape: BoxShape.circle))),
-              GestureDetector(
-                  onTap: onToggle,
-                  child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: 24,
-                      height: 24,
-                      decoration: ShapeDecoration(
-                          color: task['isDone']
-                              ? contentColor
-                              : Colors.transparent,
-                          shape: ContinuousRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side:
-                                  BorderSide(color: contentColor, width: 1.5))),
-                      child: task['isDone']
-                          ? Icon(Icons.check,
-                              size: 16,
-                              color: isDarkBg ? Colors.black : Colors.white)
-                          : null)),
-              const SizedBox(width: 16),
-              Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    AnimatedOpacity(
+            padding: const EdgeInsets.only(right: 24),
+            color: Colors.red.shade400,
+            child: const Icon(CupertinoIcons.delete, color: Colors.white),
+          ),
+          onDismissed: (_) => onDelete(),
+          child: GestureDetector(
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              color: bgColor,
+              child: Row(children: [
+                if (priority > 0 && !task['isDone'])
+                  Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                              color: priorityColor, shape: BoxShape.circle))),
+                GestureDetector(
+                    onTap: onToggle,
+                    child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        opacity: task['isDone'] ? 0.4 : 1.0,
-                        child: Text(task['title'],
-                            style: GoogleFonts.inter(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: contentColor,
-                                decoration: task['isDone']
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                                decorationColor: contentColor))),
-                    Padding(
-                        padding: const EdgeInsets.only(top: 4.0),
-                        child: Wrap(
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 8,
-                            children: [
-                              if (isHabit)
-                                Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                        color:
-                                            Colors.grey.withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(4)),
-                                    child: Text("🔥 ${task['streak'] ?? 0}",
-                                        style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: contentColor))),
-                              if (extraInfo != null && extraInfo!.isNotEmpty)
-                                Text("↻ $extraInfo",
-                                    style: TextStyle(
-                                        fontSize: 10,
-                                        color:
-                                            contentColor.withValues(alpha: 0.6),
-                                        fontWeight: FontWeight.w600)),
-                              if (task['time'] != null && !task['isDone'])
-                                Text("⏰ ${task['time']}",
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        color: contentColor.withValues(
-                                            alpha: 0.6))),
-                              if (task['tags'] != null &&
-                                  task['tags'].toString().isNotEmpty)
-                                Text("#${task['tags']}",
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        color:
-                                            contentColor.withValues(alpha: 0.6),
-                                        fontWeight: FontWeight.bold)),
-                            ])),
-                  ])),
-            ]),
+                        width: 24,
+                        height: 24,
+                        decoration: ShapeDecoration(
+                            color: task['isDone']
+                                ? contentColor
+                                : Colors.transparent,
+                            shape: ContinuousRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                    color: contentColor, width: 1.5))),
+                        child: task['isDone']
+                            ? Icon(Icons.check,
+                                size: 16,
+                                color: isDarkBg ? Colors.black : Colors.white)
+                            : null)),
+                const SizedBox(width: 16),
+                Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      AnimatedOpacity(
+                          duration: const Duration(milliseconds: 200),
+                          opacity: task['isDone'] ? 0.4 : 1.0,
+                          child: Text(task['title'],
+                              style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: contentColor,
+                                  decoration: task['isDone']
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                  decorationColor: contentColor))),
+                      Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              children: [
+                                if (isHabit)
+                                  Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                          color: Colors.grey
+                                              .withValues(alpha: 0.2),
+                                          borderRadius:
+                                              BorderRadius.circular(4)),
+                                      child: Text("🔥 ${task['streak'] ?? 0}",
+                                          style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: contentColor))),
+                                if (extraInfo != null && extraInfo!.isNotEmpty)
+                                  Text("↻ $extraInfo",
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          color: contentColor.withValues(
+                                              alpha: 0.6),
+                                          fontWeight: FontWeight.w600)),
+                                if (task['time'] != null && !task['isDone'])
+                                  Text("⏰ ${task['time']}",
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: contentColor.withValues(
+                                              alpha: 0.6))),
+                                if (task['tags'] != null &&
+                                    task['tags'].toString().isNotEmpty)
+                                  Text("#${task['tags']}",
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: contentColor.withValues(
+                                              alpha: 0.6),
+                                          fontWeight: FontWeight.bold)),
+                              ])),
+                    ])),
+              ]),
+            ),
           ),
         ),
       ),
-    );
+    )
+        .animate()
+        .fadeIn(duration: 400.ms)
+        .slideY(begin: 0.2, end: 0.0, curve: Curves.easeOutQuad);
   }
 }
 
